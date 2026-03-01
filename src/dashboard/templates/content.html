@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block title %}Content — Aegis{% endblock %}
+
+{% block content %}
+<h1 style="margin-bottom: 1.5rem; font-size: 1.5rem;">Content ({{ total }} items)</h1>
+
+<div class="filters">
+    <form method="get" action="/content" style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+        <select name="status" onchange="this.form.submit()">
+            <option value="">All Statuses</option>
+            {% for s in ['discovered', 'evaluating', 'approved', 'rejected', 'posted', 'failed'] %}
+            <option value="{{ s }}" {% if status_filter == s %}selected{% endif %}>{{ s|title }}</option>
+            {% endfor %}
+        </select>
+        <select name="category" onchange="this.form.submit()">
+            <option value="">All Categories</option>
+            {% for item in items %}
+            {% if item.get('category') and item['category'] not in seen_cats|default([]) %}
+            <option value="{{ item['category'] }}" {% if category_filter == item['category'] %}selected{% endif %}>{{ item['category'] }}</option>
+            {% endif %}
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<div class="section" style="overflow-x: auto;">
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Source</th>
+                <th>Category</th>
+                <th>Score</th>
+                <th>Status</th>
+                <th>Discovered</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+            <tr>
+                <td>
+                    <a href="{{ item['url'] }}" target="_blank" class="text-truncate" style="display: block;">
+                        {{ item['title'][:80] }}{% if item['title']|length > 80 %}...{% endif %}
+                    </a>
+                </td>
+                <td>
+                    <span class="badge badge-dim">{{ item['source_type'] }}</span>
+                </td>
+                <td>
+                    {% if item.get('category') %}
+                    <span class="badge badge-blue">{{ item['category'] }}</span>
+                    {% else %}
+                    <span class="badge badge-dim">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if item.get('relevance_score') is not none %}
+                    {% set score = item['relevance_score'] %}
+                    <span class="badge {% if score >= 7 %}badge-green{% elif score >= 4 %}badge-orange{% else %}badge-red{% endif %}">
+                        {{ score }}/10
+                    </span>
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+                <td>
+                    {% set st = item['status'] %}
+                    <span class="badge {% if st == 'posted' %}badge-green{% elif st == 'approved' %}badge-blue{% elif st == 'rejected' %}badge-red{% elif st == 'failed' %}badge-red{% elif st == 'evaluating' %}badge-orange{% else %}badge-dim{% endif %}">
+                        {{ st }}
+                    </span>
+                </td>
+                <td style="font-size: 0.8rem; color: var(--text-dim);">
+                    {{ item['discovered_at'][:16] }}
+                </td>
+            </tr>
+            {% endfor %}
+            {% if not items %}
+            <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-dim); padding: 2rem;">
+                    No content found matching filters.
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="pagination">
+    {% if page > 1 %}
+    <a href="/content?page={{ page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">&laquo; Prev</a>
+    {% endif %}
+
+    {% for p in range(1, total_pages + 1) %}
+        {% if p == page %}
+        <span class="current">{{ p }}</span>
+        {% elif p <= 3 or p > total_pages - 2 or (p >= page - 1 and p <= page + 1) %}
+        <a href="/content?page={{ p }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">{{ p }}</a>
+        {% elif p == 4 or p == total_pages - 2 %}
+        <span style="color: var(--text-dim);">...</span>
+        {% endif %}
+    {% endfor %}
+
+    {% if page < total_pages %}
+    <a href="/content?page={{ page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if category_filter %}&category={{ category_filter }}{% endif %}">Next &raquo;</a>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,95 @@
+# Aegis - Configuration
+# Copy this file to config.yaml and fill in your API keys and settings.
+
+# --- LLM Configuration ---
+llm:
+  base_url: "https://api.openai.com/v1"       # OpenAI-compatible API endpoint
+  api_key: "${LLM_API_KEY}"                     # Or set LLM_API_KEY env var
+  model: "gpt-4o-mini"                          # Model name
+  temperature: 0.3                              # Lower = more deterministic
+  max_tokens: 4096                              # Max tokens per response
+  timeout: 60                                   # Request timeout in seconds
+  max_retries: 3                                # Retry count on failure
+
+# --- Discord Configuration ---
+discord:
+  bot_token: "${DISCORD_BOT_TOKEN}"             # Or set DISCORD_BOT_TOKEN env var
+  guild_id: 0                                   # Your Discord server ID
+
+# --- YouTube Configuration ---
+youtube:
+  api_key: "${YOUTUBE_API_KEY}"                 # Or set YOUTUBE_API_KEY env var
+  search_interval_minutes: 120                  # How often to search (minutes)
+  channel_check_interval_minutes: 30            # How often to check channels
+  max_results_per_search: 10                    # Results per keyword search
+  search_keywords:
+    - "AI tools for developers"
+    - "large language models"
+    - "AI coding assistant"
+    - "MLOps"
+    - "AI DevOps automation"
+    - "LLM fine-tuning"
+    - "AI agent framework"
+    - "machine learning engineering"
+  monitored_channels: []
+    # - channel_id: "UCxxxxxx"
+    #   name: "Example AI Channel"
+
+# --- Web Search Configuration (Brave Search API) ---
+web_search:
+  api_key: "${BRAVE_SEARCH_API_KEY}"            # Or set BRAVE_SEARCH_API_KEY env var
+  search_interval_minutes: 60                   # How often to search
+  max_results_per_query: 10                     # Results per query
+  search_queries:
+    - "latest AI tools for software engineers"
+    - "new LLM models released"
+    - "AI DevOps automation tools"
+    - "AI coding assistants news"
+    - "machine learning infrastructure updates"
+    - "AI agent frameworks"
+
+# --- Content Categories ---
+# Each category maps to a Discord channel. The LLM uses descriptions for classification.
+categories:
+  - name: "LLM Models & Research"
+    description: "New language models, model releases, benchmarks, research papers, and foundational AI research"
+    discord_channel_id: 0                       # Set to your channel ID
+  - name: "AI Tools & Products"
+    description: "New AI-powered tools, products, platforms, and services for developers and power users"
+    discord_channel_id: 0
+  - name: "AI Coding & Development"
+    description: "AI coding assistants, code generation, AI-powered IDEs, developer productivity with AI"
+    discord_channel_id: 0
+  - name: "MLOps & Infrastructure"
+    description: "ML operations, model deployment, training infrastructure, AI DevOps, monitoring, and scaling"
+    discord_channel_id: 0
+  - name: "AI Agents & Automation"
+    description: "Autonomous AI agents, workflow automation, agentic frameworks, and multi-agent systems"
+    discord_channel_id: 0
+  - name: "Industry News & Analysis"
+    description: "AI industry news, company announcements, policy, regulations, and market analysis"
+    discord_channel_id: 0
+
+# --- Content Pipeline ---
+pipeline:
+  relevance_threshold: 6                        # Minimum relevance score (0-10) to post
+  max_content_age_hours: 72                     # Ignore content older than this
+  relation_lookback_days: 14                    # How far back to check for related content
+  max_relations: 5                              # Max related items to show per post
+  batch_size: 5                                 # Process N items at a time
+
+# --- Scheduler ---
+scheduler:
+  cleanup_interval_hours: 24                    # How often to run cleanup
+  content_retention_days: 90                    # Keep content in DB for this long
+
+# --- Dashboard ---
+dashboard:
+  enabled: true
+  host: "0.0.0.0"
+  port: 8080
+
+# --- Logging ---
+logging:
+  level: "INFO"                                 # DEBUG, INFO, WARNING, ERROR
+  file: "logs/aegis.log"                         # Log file path (null to disable)
