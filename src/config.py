@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field, field_validator
 
 def _resolve_env_vars(value: str) -> str:
     """Replace ${ENV_VAR} patterns with environment variable values."""
-    pattern = re.compile(r"\$\{(\w+)\}")
+    pattern = re.compile(r"\$\{(\w+)}")
 
     def replacer(match: re.Match) -> str:
         env_var = match.group(1)
@@ -52,26 +52,52 @@ class MonitoredChannel(BaseModel):
     name: str = ""
 
 
-class YouTubeConfig(BaseModel):
+class YouTubeGlobalConfig(BaseModel):
     api_key: str = ""
-    search_interval_minutes: int = 120
     channel_check_interval_minutes: int = 30
     max_results_per_search: int = 10
-    search_keywords: list[str] = Field(default_factory=list)
     monitored_channels: list[MonitoredChannel] = Field(default_factory=list)
 
 
-class WebSearchConfig(BaseModel):
+class WebSearchGlobalConfig(BaseModel):
     api_key: str = ""
-    search_interval_minutes: int = 60
     max_results_per_query: int = 10
-    search_queries: list[str] = Field(default_factory=list)
 
 
-class CategoryConfig(BaseModel):
+class TopicSearchSourceConfig(BaseModel):
+    enabled: bool = True
+    max_results: int = 10
+    interval_minutes: int = 60
+
+
+class TopicSearchConfig(BaseModel):
+    youtube: TopicSearchSourceConfig = Field(
+        default_factory=lambda: TopicSearchSourceConfig(enabled=True, interval_minutes=120)
+    )
+    web: TopicSearchSourceConfig = Field(
+        default_factory=lambda: TopicSearchSourceConfig(enabled=True, interval_minutes=60)
+    )
+    query_count_per_source: int = 5
+    query_refresh_interval_hours: int = 24
+
+
+class TopicCategoryConfig(BaseModel):
     name: str
     description: str
     discord_channel_id: int = 0
+
+
+class TopicDiscordOverride(BaseModel):
+    bot_token: str | None = None
+    guild_id: int | None = None
+
+
+class TopicConfig(BaseModel):
+    name: str
+    description: str
+    categories: list[TopicCategoryConfig] = Field(default_factory=list)
+    search: TopicSearchConfig = Field(default_factory=TopicSearchConfig)
+    discord: TopicDiscordOverride | None = None
 
 
 class PipelineConfig(BaseModel):
@@ -85,6 +111,7 @@ class PipelineConfig(BaseModel):
 class SchedulerConfig(BaseModel):
     cleanup_interval_hours: int = 24
     content_retention_days: int = 90
+    max_concurrent_topics: int = 3
 
 
 class DashboardConfig(BaseModel):
@@ -109,10 +136,10 @@ class LoggingConfig(BaseModel):
 
 class AppConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
-    discord: DiscordConfig = Field(default_factory=DiscordConfig)
-    youtube: YouTubeConfig = Field(default_factory=YouTubeConfig)
-    web_search: WebSearchConfig = Field(default_factory=WebSearchConfig)
-    categories: list[CategoryConfig] = Field(default_factory=list)
+    default_discord: DiscordConfig = Field(default_factory=DiscordConfig)
+    topics: list[TopicConfig] = Field(default_factory=list)
+    youtube: YouTubeGlobalConfig = Field(default_factory=YouTubeGlobalConfig)
+    web_search: WebSearchGlobalConfig = Field(default_factory=WebSearchGlobalConfig)
     pipeline: PipelineConfig = Field(default_factory=PipelineConfig)
     scheduler: SchedulerConfig = Field(default_factory=SchedulerConfig)
     dashboard: DashboardConfig = Field(default_factory=DashboardConfig)

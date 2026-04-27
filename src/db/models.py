@@ -3,8 +3,9 @@
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS content (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic TEXT NOT NULL DEFAULT '',
     url TEXT NOT NULL,
-    url_hash TEXT NOT NULL UNIQUE,
+    url_hash TEXT NOT NULL,
     content_fingerprint TEXT NOT NULL,
     title TEXT NOT NULL,
     description TEXT DEFAULT '',
@@ -15,9 +16,11 @@ CREATE TABLE IF NOT EXISTS content (
     raw_metadata TEXT DEFAULT '{}',
     status TEXT NOT NULL DEFAULT 'discovered',
     discovered_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(topic, url_hash)
 );
 
+CREATE INDEX IF NOT EXISTS idx_content_topic ON content(topic);
 CREATE INDEX IF NOT EXISTS idx_content_url_hash ON content(url_hash);
 CREATE INDEX IF NOT EXISTS idx_content_fingerprint ON content(content_fingerprint);
 CREATE INDEX IF NOT EXISTS idx_content_status ON content(status);
@@ -26,6 +29,7 @@ CREATE INDEX IF NOT EXISTS idx_content_discovered_at ON content(discovered_at);
 CREATE TABLE IF NOT EXISTS evaluations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     content_id INTEGER NOT NULL UNIQUE,
+    topic TEXT NOT NULL DEFAULT '',
     relevance_score INTEGER NOT NULL DEFAULT 0,
     category TEXT NOT NULL DEFAULT '',
     summary TEXT NOT NULL DEFAULT '',
@@ -40,11 +44,13 @@ CREATE TABLE IF NOT EXISTS evaluations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_evaluations_content_id ON evaluations(content_id);
+CREATE INDEX IF NOT EXISTS idx_evaluations_topic ON evaluations(topic);
 CREATE INDEX IF NOT EXISTS idx_evaluations_category ON evaluations(category);
 
 CREATE TABLE IF NOT EXISTS discord_posts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     content_id INTEGER NOT NULL,
+    topic TEXT NOT NULL DEFAULT '',
     channel_id INTEGER NOT NULL,
     message_id INTEGER NOT NULL,
     thread_id INTEGER,
@@ -53,9 +59,11 @@ CREATE TABLE IF NOT EXISTS discord_posts (
 );
 
 CREATE INDEX IF NOT EXISTS idx_discord_posts_content_id ON discord_posts(content_id);
+CREATE INDEX IF NOT EXISTS idx_discord_posts_topic ON discord_posts(topic);
 
 CREATE TABLE IF NOT EXISTS relations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic TEXT NOT NULL DEFAULT '',
     content_id_a INTEGER NOT NULL,
     content_id_b INTEGER NOT NULL,
     relation_type TEXT NOT NULL DEFAULT '',
@@ -63,19 +71,22 @@ CREATE TABLE IF NOT EXISTS relations (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (content_id_a) REFERENCES content(id) ON DELETE CASCADE,
     FOREIGN KEY (content_id_b) REFERENCES content(id) ON DELETE CASCADE,
-    UNIQUE(content_id_a, content_id_b)
+    UNIQUE(topic, content_id_a, content_id_b)
 );
 
+CREATE INDEX IF NOT EXISTS idx_relations_topic ON relations(topic);
 CREATE INDEX IF NOT EXISTS idx_relations_a ON relations(content_id_a);
 CREATE INDEX IF NOT EXISTS idx_relations_b ON relations(content_id_b);
 
 CREATE TABLE IF NOT EXISTS search_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic TEXT NOT NULL DEFAULT '',
     source_type TEXT NOT NULL,
     query TEXT NOT NULL DEFAULT '',
     last_run TEXT NOT NULL DEFAULT (datetime('now')),
     results_count INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE INDEX IF NOT EXISTS idx_search_history_topic ON search_history(topic);
 CREATE INDEX IF NOT EXISTS idx_search_history_source ON search_history(source_type);
 """

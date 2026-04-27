@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse
@@ -14,15 +14,16 @@ router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+async def index(request: Request, topic: str | None = Query(None)):
     """Main dashboard page with overview stats."""
-    stats = await repository.get_content_stats()
+    stats = await repository.get_content_stats(topic=topic)
     return templates.TemplateResponse(
         "index.html",
         {
             "request": request,
             "stats": stats,
-            "now": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "topic": topic,
+            "now": datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
         },
     )
 
@@ -33,12 +34,13 @@ async def content_list(
     page: int = Query(1, ge=1),
     status: str | None = Query(None),
     category: str | None = Query(None),
+    topic: str | None = Query(None),
 ):
     """Content list page with filtering."""
     per_page = 25
     offset = (page - 1) * per_page
     items, total = await repository.get_all_content(
-        limit=per_page, offset=offset, status=status, category=category
+        limit=per_page, offset=offset, status=status, category=category, topic=topic
     )
     total_pages = (total + per_page - 1) // per_page
 
@@ -52,14 +54,15 @@ async def content_list(
             "total_pages": total_pages,
             "status_filter": status,
             "category_filter": category,
+            "topic_filter": topic,
         },
     )
 
 
 @router.get("/api/stats")
-async def api_stats():
+async def api_stats(topic: str | None = Query(None)):
     """JSON API endpoint for dashboard stats (used by htmx polling)."""
-    return await repository.get_content_stats()
+    return await repository.get_content_stats(topic=topic)
 
 
 @router.get("/api/content")
@@ -67,12 +70,13 @@ async def api_content(
     page: int = Query(1, ge=1),
     status: str | None = Query(None),
     category: str | None = Query(None),
+    topic: str | None = Query(None),
 ):
     """JSON API endpoint for content list."""
     per_page = 25
     offset = (page - 1) * per_page
     items, total = await repository.get_all_content(
-        limit=per_page, offset=offset, status=status, category=category
+        limit=per_page, offset=offset, status=status, category=category, topic=topic
     )
     return {"items": items, "total": total, "page": page}
 
@@ -80,4 +84,4 @@ async def api_content(
 @router.get("/health")
 async def health():
     """Health check endpoint."""
-    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"status": "ok", "timestamp": datetime.now(UTC).isoformat()}

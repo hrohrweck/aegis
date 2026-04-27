@@ -1,13 +1,13 @@
-"""Brave Search API content source for web-based AI content discovery."""
+"""Brave Search API content source for web-based content discovery."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 import structlog
 
-from src.config import WebSearchConfig
+from src.config import WebSearchGlobalConfig
 from src.pipeline.content import RawContent, SourceType
 from src.sources.base import ContentSource
 
@@ -17,9 +17,9 @@ BRAVE_SEARCH_URL = "https://api.search.brave.com/res/v1/web/search"
 
 
 class BraveWebSearchSource(ContentSource):
-    """Searches the web for AI content using Brave Search API."""
+    """Searches the web for content using Brave Search API."""
 
-    def __init__(self, config: WebSearchConfig) -> None:
+    def __init__(self, config: WebSearchGlobalConfig) -> None:
         self.config = config
         self._client = httpx.AsyncClient(timeout=30)
 
@@ -27,16 +27,21 @@ class BraveWebSearchSource(ContentSource):
     def source_name(self) -> str:
         return "Web Search (Brave)"
 
-    async def fetch(self) -> list[RawContent]:
-        """Run all configured search queries."""
+    async def fetch(self, queries: list[str] | None = None) -> list[RawContent]:
+        """Run the provided search queries."""
         if not self.config.api_key:
             logger.warning("web_search.no_api_key")
+            return []
+
+        search_queries = queries or []
+        if not search_queries:
+            logger.debug("web_search.no_queries")
             return []
 
         results: list[RawContent] = []
         seen_urls: set[str] = set()
 
-        for query in self.config.search_queries:
+        for query in search_queries:
             try:
                 items = await self._search(query)
                 # Deduplicate within this batch
@@ -77,9 +82,9 @@ class BraveWebSearchSource(ContentSource):
                 continue
 
             published_at = None
-            if age := result.get("age"):
+            if result.get("age"):
                 # Brave returns age like "2 days ago" - we approximate
-                published_at = datetime.now(timezone.utc)
+                published_at = datetime.now(UTC)
 
             items.append(
                 RawContent(
@@ -101,8 +106,8 @@ class BraveWebSearchSource(ContentSource):
 
         return items
 
-    async def search_for_fact_check(self, query: str, count: int = 5) -> list[dict]:
-        """Run a targeted search for fact-checking purposes. Returns simplified results."""
+    async def search_for_fact_check(self, query: str) -> list[dict]:
+        """Search for sources to use in fact-checking."""
         if not self.config.api_key:
             return []
 
@@ -113,7 +118,8 @@ class BraveWebSearchSource(ContentSource):
         }
         params = {
             "q": query,
-            "count": count,
+            "count": 5,
+            "freshness": "pw",
             "text_decorations": False,
             "search_lang": "en",
         }
@@ -124,18 +130,18 @@ class BraveWebSearchSource(ContentSource):
             )
             response.raise_for_status()
             data = response.json()
+
+            results = []
+            for result in data.get("web", {}).get("results", []):
+                results.append({
+                    "title": result.get("title", ""),
+                    "url": result.get("url", ""),
+                    "snippet": result.get("description", ""),
+                })
+            return results
         except Exception:
             logger.exception("web_search.fact_check_failed", query=query)
             return []
-
-        return [
-            {
-                "title": r.get("title", ""),
-                "url": r.get("url", ""),
-                "snippet": r.get("description", ""),
-            }
-            for r in data.get("web", {}).get("results", [])
-        ]
 
     async def close(self) -> None:
         await self._client.aclose()

@@ -16,8 +16,15 @@ class ContentSource(ABC):
         """Human-readable name for this source."""
 
     @abstractmethod
-    async def fetch(self) -> list[RawContent]:
-        """Fetch new content from this source. Returns a list of raw content items."""
+    async def fetch(self, queries: list[str] | None = None) -> list[RawContent]:
+        """Fetch new content from this source.
+
+        Args:
+            queries: Optional list of search queries to use. If not provided,
+                     the source may use its own default queries.
+        Returns:
+            A list of raw content items.
+        """
 
     async def close(self) -> None:
         """Cleanup resources. Override if needed."""

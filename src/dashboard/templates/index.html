@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard — Aegis{% endblock %}
+{% block title %}{% if topic %}{{ topic }} — {% endif %}Dashboard — Aegis{% endblock %}
 
 {% block content %}
-<div hx-get="/api/stats" hx-trigger="every 30s" hx-swap="none">
-    <h1 style="margin-bottom: 1.5rem; font-size: 1.5rem;">Dashboard Overview</h1>
+<div hx-get="/api/stats{% if topic %}?topic={{ topic }}{% endif %}" hx-trigger="every 30s" hx-swap="none">
+    <h1 style="margin-bottom: 1.5rem; font-size: 1.5rem;">
+        {% if topic %}{{ topic }}{% else %}Dashboard{% endif %} Overview
+    </h1>
 
     <div class="stats-grid">
         <div class="stat-card">

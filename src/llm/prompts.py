@@ -1,19 +1,34 @@
 """LLM prompt templates for all content processing tasks."""
 
-SYSTEM_PROMPT = """You are an AI content analyst specializing in artificial intelligence, \
-software engineering, and DevOps. You evaluate content for relevance and quality, \
-targeting an audience of AI power users, software engineers, and DevOps professionals. \
-You are always neutral, factual, and balanced in your assessments. Avoid hype, superlatives, \
-and promotional language. Present information objectively and acknowledge limitations or \
-counter-arguments when relevant."""
+from __future__ import annotations
 
 
-def relevance_prompt(title: str, description: str, url: str, categories: list[dict]) -> str:
+def system_prompt(topic_name: str, topic_description: str) -> str:
+    """Generate a topic-aware system prompt for the LLM."""
+    return (
+        f"You are a content analyst specializing in the topic: {topic_name}. "
+        f"{topic_description} "
+        "You evaluate content for relevance and quality, targeting the audience "
+        "interested in this topic. You are always neutral, factual, and balanced. "
+        "Avoid hype, superlatives, and promotional language. Present information "
+        "objectively and acknowledge limitations or counter-arguments when relevant."
+    )
+
+
+def relevance_prompt(
+    title: str,
+    description: str,
+    url: str,
+    categories: list[dict],
+    topic_name: str,
+    topic_description: str,
+) -> str:
     categories_text = "\n".join(
         f"- {c['name']}: {c['description']}" for c in categories
     )
-    return f"""Evaluate the following content for relevance to AI power users, \
-software engineers, and DevOps professionals.
+    return f"""Evaluate the following content for relevance to the topic: {topic_name}.
+
+Topic description: {topic_description}
 
 **Content:**
 - Title: {title}
@@ -27,7 +42,7 @@ Respond with ONLY a JSON object (no markdown, no extra text):
 {{
   "relevance_score": <integer 0-10, where 10 is extremely relevant>,
   "category": "<best matching category name from the list above>",
-  "target_audiences": ["<list of relevant audiences: AI power users, Software Engineers, DevOps>"],
+  "target_audiences": ["<list of relevant audience segments>"],
   "tags": ["<3-5 short topic tags>"],
   "reasoning": "<brief explanation of your relevance assessment>"
 }}"""
@@ -41,10 +56,10 @@ def summary_prompt(title: str, description: str, url: str) -> str:
 - Description: {description}
 - URL: {url}
 
-The summary should be 2-3 sentences suitable for a Discord channel post. \
+The summary should be 2-3 sentences suitable for a Discord channel post.
 It should convey the key points clearly and neutrally.
 
-The detailed description should be 2-4 paragraphs expanding on the content, \
+The detailed description should be 2-4 paragraphs expanding on the content,
 covering what it is, why it matters, and key technical details.
 
 Respond with ONLY a JSON object (no markdown, no extra text):
@@ -72,19 +87,24 @@ def fact_check_prompt(
 **Reference sources:**
 {sources_text}
 
-Assess the accuracy of the key claims. Note any confirmed facts, unverified claims, \
+Assess the accuracy of the key claims. Note any confirmed facts, unverified claims,
 or contradictions found in the reference sources. Be balanced and neutral.
 
 Respond with ONLY a JSON object (no markdown, no extra text):
 {{
-  "fact_check": "<fact-check assessment in 2-3 paragraphs, noting confirmed and unverified claims with source references>",
+  "fact_check": "<fact-check assessment, noting confirmed and unverified claims>",
   "confidence": "<high, medium, or low confidence in the content's accuracy>"
 }}"""
 
 
-def opinion_prompt(title: str, summary: str, category: str) -> str:
-    return f"""Provide a neutral, balanced assessment of the use case and relevance of the \
-following content for AI power users, software engineers, and DevOps professionals.
+def opinion_prompt(
+    title: str, summary: str, category: str, topic_name: str, topic_description: str
+) -> str:
+    return f"""Provide a neutral, balanced assessment of the use case and relevance of the
+following content within the context of {topic_name}.
+
+Topic: {topic_name}
+Topic description: {topic_description}
 
 **Content:**
 - Title: {title}
@@ -95,9 +115,9 @@ Write a balanced opinion covering:
 1. Who would benefit most from this content
 2. Practical applications or implications
 3. Any limitations or considerations
-4. How it fits into current trends
+4. How it fits into current trends within this topic area
 
-Maintain a strictly neutral tone. Present multiple perspectives where relevant. \
+Maintain a strictly neutral tone. Present multiple perspectives where relevant.
 Avoid hype or dismissiveness.
 
 Respond with ONLY a JSON object (no markdown, no extra text):
@@ -127,10 +147,10 @@ def relation_prompt(
 **Existing recent content:**
 {existing_text}
 
-Look for relationships like: follow-up, builds-upon, similar-topic, contradicts, \
+Look for relationships like: follow-up, builds-upon, similar-topic, contradicts,
 alternative, same-project, prerequisite.
 
-Only include genuinely meaningful relationships, not superficial topic overlap. \
+Only include genuinely meaningful relationships, not superficial topic overlap.
 If there are no meaningful relations, return an empty list.
 
 Respond with ONLY a JSON object (no markdown, no extra text):
@@ -142,4 +162,53 @@ Respond with ONLY a JSON object (no markdown, no extra text):
       "description": "<brief description of the relationship>"
     }}
   ]
+}}"""
+
+
+def query_generation_prompt(
+    topic_name: str,
+    topic_description: str,
+    source_type: str,
+    count: int,
+    existing_queries: list[str] | None = None,
+) -> str:
+    """Generate search queries for a given topic and source type."""
+    existing = ""
+    if existing_queries:
+        existing = (
+            "\nPreviously used queries (try to diversify and avoid exact duplicates):\n"
+            + "\n".join(f"- {q}" for q in existing_queries)
+        )
+
+    source_guidance = {
+        "youtube": (
+            "For YouTube, queries should be concise (2-5 words) and optimized for video search. "
+            "Focus on content that is likely to have recent video coverage."
+        ),
+        "web": (
+            "For web search, queries can be more descriptive (5-15 words). "
+            "Use natural language questions or specific topic phrases that "
+            "news sites and blogs would cover."
+        ),
+    }
+
+    guidance = source_guidance.get(source_type, "")
+
+    return f"""You are a search query strategist. Given a topic, generate {count} effective
+search queries for {source_type.upper()} search to discover the most relevant and recent content.
+
+**Topic:** {topic_name}
+**Topic description:** {topic_description}
+{guidance}
+{existing}
+
+Requirements:
+- Each query should target a different angle or sub-topic within the main topic
+- Prioritize queries that would find recent or trending content
+- Avoid overly broad queries that would return irrelevant results
+- Queries should be in English
+
+Respond with ONLY a JSON object (no markdown, no extra text):
+{{
+  "queries": ["<query 1>", "<query 2>", "..."]
 }}"""

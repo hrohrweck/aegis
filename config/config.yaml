@@ -1,5 +1,6 @@
 # Aegis - Configuration
-# Copy this file to config.yaml and fill in your API keys and settings.
+# Topic-centric configuration. Each topic is an independent agent with its own
+# categories, search configuration, and Discord channel mappings.
 
 # --- LLM Configuration ---
 llm:
@@ -11,64 +12,85 @@ llm:
   timeout: 60                                   # Request timeout in seconds
   max_retries: 3                                # Retry count on failure
 
-# --- Discord Configuration ---
-discord:
+# --- Default Discord Server ---
+default_discord:
   bot_token: "${DISCORD_BOT_TOKEN}"             # Or set DISCORD_BOT_TOKEN env var
   guild_id: 0                                   # Your Discord server ID
 
-# --- YouTube Configuration ---
+# --- YouTube Global Settings ---
 youtube:
   api_key: "${YOUTUBE_API_KEY}"                 # Or set YOUTUBE_API_KEY env var
-  search_interval_minutes: 120                  # How often to search (minutes)
-  channel_check_interval_minutes: 30            # How often to check channels
+  channel_check_interval_minutes: 30            # How often to check monitored channels
   max_results_per_search: 10                    # Results per keyword search
-  search_keywords:
-    - "AI tools for developers"
-    - "large language models"
-    - "AI coding assistant"
-    - "MLOps"
-    - "AI DevOps automation"
-    - "LLM fine-tuning"
-    - "AI agent framework"
-    - "machine learning engineering"
-  monitored_channels: []
+  monitored_channels: []                        # Global channel monitoring (all topics)
     # - channel_id: "UCxxxxxx"
-    #   name: "Example AI Channel"
+    #   name: "Example Channel"
 
-# --- Web Search Configuration (Brave Search API) ---
+# --- Web Search Global Settings (Brave Search API) ---
 web_search:
   api_key: "${BRAVE_SEARCH_API_KEY}"            # Or set BRAVE_SEARCH_API_KEY env var
-  search_interval_minutes: 60                   # How often to search
   max_results_per_query: 10                     # Results per query
-  search_queries:
-    - "latest AI tools for software engineers"
-    - "new LLM models released"
-    - "AI DevOps automation tools"
-    - "AI coding assistants news"
-    - "machine learning infrastructure updates"
-    - "AI agent frameworks"
 
-# --- Content Categories ---
-# Each category maps to a Discord channel. The LLM uses descriptions for classification.
-categories:
-  - name: "LLM Models & Research"
-    description: "New language models, model releases, benchmarks, research papers, and foundational AI research"
-    discord_channel_id: 0                       # Set to your channel ID
-  - name: "AI Tools & Products"
-    description: "New AI-powered tools, products, platforms, and services for developers and power users"
-    discord_channel_id: 0
-  - name: "AI Coding & Development"
-    description: "AI coding assistants, code generation, AI-powered IDEs, developer productivity with AI"
-    discord_channel_id: 0
-  - name: "MLOps & Infrastructure"
-    description: "ML operations, model deployment, training infrastructure, AI DevOps, monitoring, and scaling"
-    discord_channel_id: 0
-  - name: "AI Agents & Automation"
-    description: "Autonomous AI agents, workflow automation, agentic frameworks, and multi-agent systems"
-    discord_channel_id: 0
-  - name: "Industry News & Analysis"
-    description: "AI industry news, company announcements, policy, regulations, and market analysis"
-    discord_channel_id: 0
+# --- Topics ---
+# Each topic is an independent content curation agent.
+# The LLM generates search queries from the topic description.
+topics:
+  - name: "Artificial Intelligence"
+    description: >
+      Latest developments in artificial intelligence, large language models,
+      AI coding assistants, machine learning infrastructure, and autonomous agents
+      for developers and power users.
+    search:
+      youtube:
+        enabled: true
+        max_results: 10
+        interval_minutes: 120
+      web:
+        enabled: true
+        max_results: 10
+        interval_minutes: 60
+      query_count_per_source: 5
+      query_refresh_interval_hours: 24
+    categories:
+      - name: "LLM Models & Research"
+        description: "New language models, benchmarks, research papers, and foundational AI research"
+        discord_channel_id: 0
+      - name: "AI Tools & Products"
+        description: "New AI-powered tools, products, platforms, and services"
+        discord_channel_id: 0
+      - name: "AI Coding & Development"
+        description: "AI coding assistants, code generation, AI-powered IDEs, developer productivity"
+        discord_channel_id: 0
+      - name: "MLOps & Infrastructure"
+        description: "ML operations, model deployment, training infrastructure, AI DevOps"
+        discord_channel_id: 0
+      - name: "AI Agents & Automation"
+        description: "Autonomous AI agents, workflow automation, agentic frameworks"
+        discord_channel_id: 0
+
+  - name: "Blockchain & Web3"
+    description: >
+      Blockchain technology, smart contracts, decentralized finance (DeFi),
+      Web3 development, and cryptocurrency infrastructure.
+    search:
+      youtube:
+        enabled: false
+      web:
+        enabled: true
+        max_results: 10
+        interval_minutes: 120
+      query_count_per_source: 5
+      query_refresh_interval_hours: 24
+    categories:
+      - name: "DeFi & Protocols"
+        description: "Decentralized finance platforms, lending, DEXs, and yield farming"
+        discord_channel_id: 0
+      - name: "Smart Contracts & Development"
+        description: "Smart contract development, security audits, and blockchain tooling"
+        discord_channel_id: 0
+      - name: "Layer 2 & Scaling"
+        description: "Layer 2 solutions, rollups, and blockchain scaling technologies"
+        discord_channel_id: 0
 
 # --- Content Pipeline ---
 pipeline:
@@ -82,6 +104,7 @@ pipeline:
 scheduler:
   cleanup_interval_hours: 24                    # How often to run cleanup
   content_retention_days: 90                    # Keep content in DB for this long
+  max_concurrent_topics: 3                      # Max topics running simultaneously
 
 # --- Dashboard ---
 dashboard:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 from pathlib import Path
 
 import pytest
@@ -22,19 +20,26 @@ class TestConfigLoading:
         assert config.llm.api_key == "sk-test"
         assert config.llm.model == "gpt-4o-mini"  # default
         assert config.pipeline.relevance_threshold == 6  # default
+        assert config.topics == []  # default
 
-    def test_load_full_config(self, tmp_path: Path):
-        """All fields should be parsed correctly."""
+    def test_load_topic_based_config(self, tmp_path: Path):
+        """Topic-based config should parse correctly."""
         data = {
             "llm": {"base_url": "http://localhost:11434/v1", "api_key": "key", "model": "llama3"},
-            "discord": {"bot_token": "token", "guild_id": 999},
-            "youtube": {
-                "api_key": "yt-key",
-                "search_keywords": ["AI", "ML"],
-                "monitored_channels": [{"channel_id": "UC123", "name": "TestCh"}],
-            },
-            "categories": [
-                {"name": "Cat1", "description": "Desc1", "discord_channel_id": 111}
+            "default_discord": {"bot_token": "token", "guild_id": 999},
+            "youtube": {"api_key": "yt-key"},
+            "topics": [
+                {
+                    "name": "AI",
+                    "description": "AI content",
+                    "categories": [
+                        {"name": "Tools", "description": "AI tools", "discord_channel_id": 111}
+                    ],
+                    "search": {
+                        "query_count_per_source": 5,
+                        "query_refresh_interval_hours": 12,
+                    },
+                }
             ],
         }
         config_file = tmp_path / "config.yaml"
@@ -42,10 +47,12 @@ class TestConfigLoading:
 
         config = load_config(config_file)
         assert config.llm.model == "llama3"
-        assert config.discord.guild_id == 999
-        assert len(config.youtube.search_keywords) == 2
-        assert config.youtube.monitored_channels[0].channel_id == "UC123"
-        assert len(config.categories) == 1
+        assert config.default_discord.guild_id == 999
+        assert len(config.topics) == 1
+        assert config.topics[0].name == "AI"
+        assert config.topics[0].search.query_count_per_source == 5
+        assert len(config.topics[0].categories) == 1
+        assert config.topics[0].categories[0].discord_channel_id == 111
 
     def test_env_var_resolution(self, tmp_path: Path, monkeypatch):
         """Environment variables in ${VAR} syntax should be resolved."""
@@ -72,3 +79,19 @@ class TestConfigLoading:
         config_file.write_text(yaml.dump({"logging": {"level": "BANANA"}}))
         with pytest.raises(Exception):
             load_config(config_file)
+
+    def test_topic_discord_override(self, tmp_path: Path):
+        config_file = tmp_path / "config.yaml"
+        data = {
+            "topics": [
+                {
+                    "name": "Test",
+                    "description": "Test topic",
+                    "discord": {"guild_id": 987654321},
+                    "categories": [],
+                }
+            ]
+        }
+        config_file.write_text(yaml.dump(data))
+        config = load_config(config_file)
+        assert config.topics[0].discord.guild_id == 987654321

@@ -3,16 +3,24 @@
 from __future__ import annotations
 
 from src.llm.prompts import (
-    relevance_prompt,
-    summary_prompt,
     fact_check_prompt,
     opinion_prompt,
+    query_generation_prompt,
     relation_prompt,
+    relevance_prompt,
+    summary_prompt,
+    system_prompt,
 )
 
 
 class TestPrompts:
-    def test_relevance_prompt_includes_content(self):
+    def test_system_prompt_includes_topic(self):
+        prompt = system_prompt("Artificial Intelligence", "AI and ML content")
+        assert "Artificial Intelligence" in prompt
+        assert "AI and ML content" in prompt
+        assert "content analyst" in prompt.lower()
+
+    def test_relevance_prompt_includes_content_and_topic(self):
         prompt = relevance_prompt(
             title="New LLM Model Released",
             description="A new open-source language model",
@@ -21,10 +29,14 @@ class TestPrompts:
                 {"name": "LLM Models", "description": "Language model releases"},
                 {"name": "AI Tools", "description": "AI tool releases"},
             ],
+            topic_name="Artificial Intelligence",
+            topic_description="AI content for developers",
         )
         assert "New LLM Model Released" in prompt
         assert "LLM Models" in prompt
         assert "AI Tools" in prompt
+        assert "Artificial Intelligence" in prompt
+        assert "AI content for developers" in prompt
         assert "JSON" in prompt
 
     def test_summary_prompt_includes_content(self):
@@ -51,13 +63,16 @@ class TestPrompts:
         assert "Source 2" in prompt
         assert "neutral" in prompt.lower() or "balanced" in prompt.lower()
 
-    def test_opinion_prompt_requests_neutrality(self):
+    def test_opinion_prompt_requests_neutrality_with_topic(self):
         prompt = opinion_prompt(
             title="Some AI Tool",
             summary="A tool that does X",
             category="AI Tools",
+            topic_name="Artificial Intelligence",
+            topic_description="AI content",
         )
         assert "neutral" in prompt.lower()
+        assert "Artificial Intelligence" in prompt
         assert "JSON" in prompt
 
     def test_relation_prompt_includes_existing(self):
@@ -74,3 +89,27 @@ class TestPrompts:
         assert "Related Post" in prompt
         assert "Other Post" in prompt
         assert "ID:1" in prompt
+
+    def test_query_generation_prompt_includes_topic(self):
+        prompt = query_generation_prompt(
+            topic_name="Artificial Intelligence",
+            topic_description="AI content for developers",
+            source_type="youtube",
+            count=5,
+        )
+        assert "Artificial Intelligence" in prompt
+        assert "AI content for developers" in prompt
+        assert "YOUTUBE" in prompt
+        assert "queries" in prompt.lower()
+        assert "JSON" in prompt
+
+    def test_query_generation_prompt_with_existing_queries(self):
+        prompt = query_generation_prompt(
+            topic_name="AI",
+            topic_description="AI",
+            source_type="web",
+            count=3,
+            existing_queries=["previous query 1", "previous query 2"],
+        )
+        assert "previous query 1" in prompt
+        assert "diversify" in prompt.lower()

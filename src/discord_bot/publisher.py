@@ -5,7 +5,7 @@ from __future__ import annotations
 import discord
 import structlog
 
-from src.config import AppConfig
+from src.config import TopicConfig
 from src.db import repository
 from src.discord_bot.bot import CuratorBot
 from src.pipeline.content import ContentStatus, ProcessedContent
@@ -18,14 +18,22 @@ MAX_EMBED_DESCRIPTION = 4096
 MAX_THREAD_NAME = 100
 
 
+def _category_color(category: str) -> int:
+    """Generate a deterministic color for a category based on its name."""
+    # Simple hash-based color generation for visual distinction
+    hash_val = hash(category) & 0xFFFFFF
+    # Ensure it's not too dark
+    return max(hash_val, 0x333333)
+
+
 class ContentPublisher:
     """Publishes processed content to Discord channels with threads."""
 
-    def __init__(self, bot: CuratorBot, config: AppConfig) -> None:
+    def __init__(self, bot: CuratorBot, topic_config: TopicConfig) -> None:
         self.bot = bot
-        self.config = config
+        self.topic_config = topic_config
         self._channel_map: dict[str, int] = {
-            cat.name: cat.discord_channel_id for cat in config.categories
+            cat.name: cat.discord_channel_id for cat in topic_config.categories
         }
 
     async def publish(self, content: ProcessedContent) -> bool:
@@ -48,6 +56,7 @@ class ContentPublisher:
             logger.warning(
                 "publisher.no_channel",
                 category=content.evaluation.category,
+                topic=self.topic_config.name,
             )
             return False
 
@@ -57,6 +66,7 @@ class ContentPublisher:
                 "publisher.channel_not_found",
                 channel_id=channel_id,
                 category=content.evaluation.category,
+                topic=self.topic_config.name,
             )
             return False
 
@@ -73,12 +83,14 @@ class ContentPublisher:
                 channel_id=channel_id,
                 message_id=message.id,
                 thread_id=thread.id if thread else None,
+                topic=content.topic,
             )
             await repository.update_content_status(content.id, ContentStatus.POSTED)
 
             logger.info(
                 "publisher.posted",
                 content_id=content.id,
+                topic=content.topic,
                 channel=channel.name,
                 thread=thread.name if thread else None,
             )
@@ -89,6 +101,7 @@ class ContentPublisher:
                 "publisher.discord_error",
                 content_id=content.id,
                 channel_id=channel_id,
+                topic=content.topic,
             )
             await repository.update_content_status(content.id, ContentStatus.FAILED)
             return False
@@ -124,9 +137,11 @@ class ContentPublisher:
                 inline=True,
             )
 
+        score = evaluation.relevance_score
+        stars = f"{'★' * score}{'☆' * (10 - score)} ({score}/10)"
         embed.add_field(
             name="Relevance",
-            value=f"{'★' * evaluation.relevance_score}{'☆' * (10 - evaluation.relevance_score)} ({evaluation.relevance_score}/10)",
+            value=stars,
             inline=True,
         )
 
@@ -144,8 +159,9 @@ class ContentPublisher:
             relation_lines = []
             for rel in content.relations[:3]:
                 if rel.related_title and rel.related_url:
+                    title = _truncate(rel.related_title, 60)
                     relation_lines.append(
-                        f"🔗 **{rel.relation_type}**: [{_truncate(rel.related_title, 60)}]({rel.related_url})"
+                        f"🔗 **{rel.relation_type}**: [{title}]({rel.related_url})"
                     )
             if relation_lines:
                 relation_text = "\n".join(relation_lines)
@@ -228,16 +244,3 @@ def _split_message(text: str, max_len: int = MAX_MESSAGE_LENGTH) -> list[str]:
         text = text[split_at:].lstrip()
 
     return chunks
-
-
-def _category_color(category: str) -> int:
-    """Assign a color to a category for visual distinction in embeds."""
-    colors = {
-        "LLM Models & Research": 0x7289DA,  # Blurple
-        "AI Tools & Products": 0x43B581,    # Green
-        "AI Coding & Development": 0xFAA61A, # Orange
-        "MLOps & Infrastructure": 0xF04747,  # Red
-        "AI Agents & Automation": 0x9B59B6,  # Purple
-        "Industry News & Analysis": 0x3498DB, # Blue
-    }
-    return colors.get(category, 0x99AAB5)  # Default grey
