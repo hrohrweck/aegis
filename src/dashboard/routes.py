@@ -61,8 +61,21 @@ async def content_list(
 
 @router.get("/api/stats")
 async def api_stats(topic: str | None = Query(None)):
-    """JSON API endpoint for dashboard stats (used by htmx polling)."""
+    """JSON API endpoint for dashboard stats."""
     return await repository.get_content_stats(topic=topic)
+
+
+@router.get("/api/stats-html", response_class=HTMLResponse)
+async def api_stats_html(request: Request, topic: str | None = Query(None)):
+    """HTML partial for dashboard stats (used by htmx polling)."""
+    stats = await repository.get_content_stats(topic=topic)
+    return templates.TemplateResponse(
+        "_stats_partial.html",
+        {
+            "request": request,
+            "stats": stats,
+        },
+    )
 
 
 @router.get("/api/content")

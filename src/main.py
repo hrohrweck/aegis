@@ -15,11 +15,11 @@ import uvicorn
 from dotenv import load_dotenv
 
 from src.agent.topic_agent import TopicAgent
-from src.config import AppConfig, load_config
+from src.config import AppConfig, DiscordConfig, load_config
 from src.dashboard.app import create_dashboard_app
 from src.dashboard.routes import router as dashboard_router
 from src.db.database import close_db, get_db
-from src.discord_bot.bot import create_bot
+from src.discord_bot.bot import CuratorBot, create_bot
 from src.llm.client import LLMClient
 from src.scheduler.jobs import TopicScheduler
 from src.sources.web_search import BraveWebSearchSource
@@ -88,10 +88,27 @@ def create_shared_sources(config: AppConfig) -> tuple[
     return youtube_search, youtube_channels, web_search
 
 
+def _get_topic_discord_config(
+    topic_config, default_config: DiscordConfig
+) -> DiscordConfig:
+    """Return the effective DiscordConfig for a topic (default or override)."""
+    if topic_config.discord is None:
+        return default_config
+    return DiscordConfig(
+        bot_token=topic_config.discord.bot_token or default_config.bot_token,
+        guild_id=topic_config.discord.guild_id or default_config.guild_id,
+    )
+
+
+def _bot_key(config: DiscordConfig) -> str:
+    """Unique key for a Discord bot configuration."""
+    return f"{config.bot_token}:{config.guild_id}"
+
+
 def create_topic_agents(
     config: AppConfig,
     llm: LLMClient,
-    bot,
+    bots: dict[str, CuratorBot],
     youtube_search: YouTubeSearchSource | None,
     youtube_channels: YouTubeChannelSource | None,
     web_search: BraveWebSearchSource | None,
@@ -104,6 +121,10 @@ def create_topic_agents(
         yt = youtube_search if youtube_search and topic_config.search.youtube.enabled else None
         ws = web_search if web_search and topic_config.search.web.enabled else None
         ch = youtube_channels if youtube_channels else None
+
+        # Select the appropriate bot for this topic
+        discord_config = _get_topic_discord_config(topic_config, config.default_discord)
+        bot = bots[_bot_key(discord_config)]
 
         agent = TopicAgent(
             topic_config=topic_config,
@@ -131,11 +152,21 @@ async def run_app(config: AppConfig) -> None:
     llm = LLMClient(config.llm)
     youtube_search, youtube_channels, web_search = create_shared_sources(config)
 
-    # Create Discord bot
-    bot = create_bot(config.default_discord)
+    # Create Discord bots (one per unique discord config)
+    bots: dict[str, CuratorBot] = {}
+    discord_configs = [config.default_discord]
+    for topic_config in config.topics:
+        dc = _get_topic_discord_config(topic_config, config.default_discord)
+        if _bot_key(dc) not in [_bot_key(c) for c in discord_configs]:
+            discord_configs.append(dc)
+
+    for dc in discord_configs:
+        bots[_bot_key(dc)] = create_bot(dc)
 
     # Create topic agents
-    agents = create_topic_agents(config, llm, bot, youtube_search, youtube_channels, web_search)
+    agents = create_topic_agents(
+        config, llm, bots, youtube_search, youtube_channels, web_search
+    )
 
     logger.info(
         "app.agents_ready",
@@ -186,13 +217,23 @@ async def run_app(config: AppConfig) -> None:
             # Windows doesn't support add_signal_handler
             pass
 
-    # Start Discord bot
-    bot_task = None
-    if config.default_discord.bot_token:
-        bot_task = asyncio.create_task(bot.start(config.default_discord.bot_token))
-        logger.info("discord.bot_starting")
-    else:
-        logger.warning("discord.no_token", msg="Bot will not start — no token configured")
+    # Start Discord bots
+    bot_tasks: list[asyncio.Task] = []
+    started_bots = 0
+    for key, bot in bots.items():
+        if bot.config.bot_token:
+            task = asyncio.create_task(bot.start(bot.config.bot_token))
+            bot_tasks.append(task)
+            started_bots += 1
+            logger.info("discord.bot_starting", guild_id=bot.config.guild_id)
+        else:
+            logger.warning(
+                "discord.no_token",
+                guild_id=bot.config.guild_id,
+                msg="Bot will not start — no token configured",
+            )
+    if started_bots:
+        logger.info("discord.bots_started", count=started_bots)
 
     scheduler.start()
 
@@ -212,8 +253,12 @@ async def run_app(config: AppConfig) -> None:
     logger.info("app.shutting_down")
     scheduler.stop()
 
-    if bot_task and not bot_task.done():
-        await bot.close()
+    for task in bot_tasks:
+        if not task.done():
+            task.cancel()
+    for bot in bots.values():
+        if not bot.is_closed():
+            await bot.close()
 
     for source in (youtube_search, youtube_channels, web_search):
         if source:

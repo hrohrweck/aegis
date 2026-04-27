@@ -165,11 +165,8 @@ class TopicAgent:
         # YouTubeChannelSource ignores queries
 
         try:
-            raw_items = await source.fetch(source_queries)
-            if raw_items:
-                processed = await self.processor.process_source(source)
-                return len(processed)
-            return 0
+            processed = await self.processor.process_source(source, source_queries)
+            return len(processed)
         except Exception:
             logger.exception(
                 "agent.fetch_process_failed",
