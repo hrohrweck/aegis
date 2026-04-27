@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import structlog
 
-from src.config import YouTubeConfig
+from src.config import YouTubeGlobalConfig
 from src.pipeline.content import RawContent, SourceType
 from src.sources.base import ContentSource
 
@@ -20,7 +20,7 @@ YOUTUBE_VIDEO_URL = "https://www.youtube.com/watch?v="
 class YouTubeChannelSource(ContentSource):
     """Monitors specific YouTube channels for new uploads."""
 
-    def __init__(self, config: YouTubeConfig) -> None:
+    def __init__(self, config: YouTubeGlobalConfig) -> None:
         self.config = config
         self._client = httpx.AsyncClient(timeout=30)
 
@@ -28,8 +28,9 @@ class YouTubeChannelSource(ContentSource):
     def source_name(self) -> str:
         return "YouTube Channels"
 
-    async def fetch(self) -> list[RawContent]:
+    async def fetch(self, queries: list[str] | None = None) -> list[RawContent]:
         """Check each monitored channel for new videos."""
+        del queries  # Not used for channel monitoring
         if not self.config.api_key:
             logger.warning("youtube_channels.no_api_key")
             return []
@@ -40,9 +41,9 @@ class YouTubeChannelSource(ContentSource):
 
         results: list[RawContent] = []
         published_after = (
-            datetime.now(timezone.utc)
+            datetime.now(UTC)
             - timedelta(minutes=self.config.channel_check_interval_minutes * 2)
-        ).isoformat() + "Z"
+        ).isoformat().replace("+00:00", "Z")
 
         for channel in self.config.monitored_channels:
             try:

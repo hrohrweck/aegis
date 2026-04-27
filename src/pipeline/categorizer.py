@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import structlog
 
-from src.config import AppConfig
+from src.config import TopicConfig
 from src.llm.client import LLMClient
 from src.llm.prompts import (
-    SYSTEM_PROMPT,
     fact_check_prompt,
     opinion_prompt,
     relation_prompt,
     relevance_prompt,
     summary_prompt,
+    system_prompt,
 )
 from src.pipeline.content import ContentEvaluation, ContentRelation, RawContent
 from src.sources.web_search import BraveWebSearchSource
@@ -26,15 +26,17 @@ class ContentEvaluator:
     def __init__(
         self,
         llm: LLMClient,
-        config: AppConfig,
+        topic_config: TopicConfig,
         web_search: BraveWebSearchSource | None = None,
     ) -> None:
         self.llm = llm
-        self.config = config
+        self.topic_config = topic_config
         self.web_search = web_search
         self._categories = [
-            {"name": c.name, "description": c.description} for c in config.categories
+            {"name": c.name, "description": c.description}
+            for c in topic_config.categories
         ]
+        self._system = system_prompt(topic_config.name, topic_config.description)
 
     async def evaluate_relevance(self, raw: RawContent) -> ContentEvaluation:
         """Evaluate content relevance, categorize, and generate summary + enrichment."""
@@ -48,11 +50,12 @@ class ContentEvaluator:
         evaluation.tags = relevance_result.get("tags", [])
 
         # If not relevant enough, skip expensive operations
-        if evaluation.relevance_score < self.config.pipeline.relevance_threshold:
+        # Note: threshold is checked by caller (processor) using global config
+        if not evaluation.category:
             logger.info(
-                "evaluator.low_relevance",
+                "evaluator.no_category",
                 title=raw.title[:60],
-                score=evaluation.relevance_score,
+                topic=self.topic_config.name,
             )
             return evaluation
 
@@ -74,6 +77,7 @@ class ContentEvaluator:
             title=raw.title[:60],
             score=evaluation.relevance_score,
             category=evaluation.category,
+            topic=self.topic_config.name,
         )
 
         return evaluation
@@ -92,10 +96,10 @@ class ContentEvaluator:
             new_title=raw.title,
             new_summary=evaluation.summary,
             new_category=evaluation.category,
-            existing_content=existing_content[: self.config.pipeline.max_relations * 3],
+            existing_content=existing_content[: len(self.topic_config.categories) * 3],
         )
 
-        result = await self.llm.complete_json(SYSTEM_PROMPT, prompt)
+        result = await self.llm.complete_json(self._system, prompt)
         relations = []
         for rel in result.get("relations", []):
             try:
@@ -109,7 +113,7 @@ class ContentEvaluator:
             except (KeyError, ValueError, TypeError):
                 continue
 
-        return relations[: self.config.pipeline.max_relations]
+        return relations[: len(self.topic_config.categories)]
 
     async def _assess_relevance(self, raw: RawContent) -> dict:
         prompt = relevance_prompt(
@@ -117,8 +121,10 @@ class ContentEvaluator:
             description=raw.description[:500],
             url=raw.url,
             categories=self._categories,
+            topic_name=self.topic_config.name,
+            topic_description=self.topic_config.description,
         )
-        result = await self.llm.complete_json(SYSTEM_PROMPT, prompt)
+        result = await self.llm.complete_json(self._system, prompt)
         # Validate/clamp score
         score = result.get("relevance_score", 0)
         if not isinstance(score, int):
@@ -135,7 +141,7 @@ class ContentEvaluator:
             description=raw.description[:1000],
             url=raw.url,
         )
-        return await self.llm.complete_json(SYSTEM_PROMPT, prompt)
+        return await self.llm.complete_json(self._system, prompt)
 
     async def _fact_check(self, raw: RawContent, summary: str) -> str:
         """Use web search to gather sources, then LLM to fact-check."""
@@ -152,14 +158,18 @@ class ContentEvaluator:
             summary=summary,
             search_results=search_results,
         )
-        result = await self.llm.complete_json(SYSTEM_PROMPT, prompt)
+        result = await self.llm.complete_json(self._system, prompt)
         return result.get("fact_check", "Fact-check could not be completed.")
 
-    async def _generate_opinion(self, raw: RawContent, summary: str, category: str) -> str:
+    async def _generate_opinion(
+        self, raw: RawContent, summary: str, category: str
+    ) -> str:
         prompt = opinion_prompt(
             title=raw.title,
             summary=summary,
             category=category,
+            topic_name=self.topic_config.name,
+            topic_description=self.topic_config.description,
         )
-        result = await self.llm.complete_json(SYSTEM_PROMPT, prompt)
+        result = await self.llm.complete_json(self._system, prompt)
         return result.get("opinion", "")

@@ -16,7 +16,7 @@ def create_dashboard_app() -> FastAPI:
     """Create the FastAPI dashboard application."""
     app = FastAPI(
         title="Aegis Dashboard",
-        description="Monitoring dashboard for the Aegis AI content curation bot",
+        description="Monitoring dashboard for the Aegis content curation bot",
         version="0.1.0",
     )
 

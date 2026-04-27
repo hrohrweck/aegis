@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.discord_bot.publisher import _truncate, _split_message, _category_color
+from src.discord_bot.publisher import _category_color, _split_message, _truncate
 
 
 class TestTruncate:
@@ -39,8 +39,19 @@ class TestSplitMessage:
 
 
 class TestCategoryColor:
-    def test_known_category(self):
-        assert _category_color("LLM Models & Research") == 0x7289DA
+    def test_returns_deterministic_color(self):
+        color1 = _category_color("Test Category")
+        color2 = _category_color("Test Category")
+        assert color1 == color2
+        assert isinstance(color1, int)
+        assert color1 > 0
 
-    def test_unknown_category_returns_default(self):
-        assert _category_color("Unknown Category") == 0x99AAB5
+    def test_different_categories_get_different_colors(self):
+        color1 = _category_color("Category A")
+        color2 = _category_color("Category B")
+        # They might occasionally collide, but it's unlikely
+        assert color1 != color2
+
+    def test_color_not_too_dark(self):
+        color = _category_color("Any Category")
+        assert color >= 0x333333

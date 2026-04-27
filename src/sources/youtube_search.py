@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import structlog
 
-from src.config import YouTubeConfig
+from src.config import YouTubeGlobalConfig
 from src.pipeline.content import RawContent, SourceType
 from src.sources.base import ContentSource
 
@@ -18,9 +18,9 @@ YOUTUBE_VIDEO_URL = "https://www.youtube.com/watch?v="
 
 
 class YouTubeSearchSource(ContentSource):
-    """Searches YouTube for AI-related content using keyword queries."""
+    """Searches YouTube for content using keyword queries."""
 
-    def __init__(self, config: YouTubeConfig) -> None:
+    def __init__(self, config: YouTubeGlobalConfig) -> None:
         self.config = config
         self._client = httpx.AsyncClient(timeout=30)
 
@@ -28,19 +28,25 @@ class YouTubeSearchSource(ContentSource):
     def source_name(self) -> str:
         return "YouTube Search"
 
-    async def fetch(self) -> list[RawContent]:
-        """Search YouTube for each configured keyword."""
+    async def fetch(self, queries: list[str] | None = None) -> list[RawContent]:
+        """Search YouTube for the provided keywords."""
         if not self.config.api_key:
             logger.warning("youtube_search.no_api_key")
             return []
 
+        keywords = queries or []
+        if not keywords:
+            logger.debug("youtube_search.no_queries")
+            return []
+
         results: list[RawContent] = []
         # Search for content published in the last N hours
+        # Use a generous window to avoid missing content
         published_after = (
-            datetime.now(timezone.utc) - timedelta(hours=self.config.search_interval_minutes * 2 / 60)
-        ).isoformat() + "Z"
+            datetime.now(UTC) - timedelta(hours=48)
+        ).isoformat().replace("+00:00", "Z")
 
-        for keyword in self.config.search_keywords:
+        for keyword in keywords:
             try:
                 items = await self._search(keyword, published_after)
                 results.extend(items)

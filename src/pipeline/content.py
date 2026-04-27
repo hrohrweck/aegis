@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 
 
-class SourceType(str, Enum):
+class SourceType(StrEnum):
     YOUTUBE_SEARCH = "youtube_search"
     YOUTUBE_CHANNEL = "youtube_channel"
     WEB_SEARCH = "web_search"
 
 
-class ContentStatus(str, Enum):
+class ContentStatus(StrEnum):
     DISCOVERED = "discovered"
     EVALUATING = "evaluating"
     APPROVED = "approved"
@@ -77,11 +77,12 @@ class ProcessedContent:
     """Fully processed content ready for posting."""
 
     id: int | None = None
+    topic: str = ""
     raw: RawContent | None = None
     evaluation: ContentEvaluation = field(default_factory=ContentEvaluation)
     relations: list[ContentRelation] = field(default_factory=list)
     status: ContentStatus = ContentStatus.DISCOVERED
-    discovered_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    discovered_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     posted_at: datetime | None = None
     discord_message_id: int | None = None
     discord_thread_id: int | None = None

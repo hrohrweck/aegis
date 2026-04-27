@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
-import pytest
-
 from src.pipeline.content import (
     ContentEvaluation,
     ContentStatus,
@@ -60,6 +56,7 @@ class TestProcessedContent:
     def test_should_post_when_approved(self):
         pc = ProcessedContent(
             id=1,
+            topic="AI",
             status=ContentStatus.APPROVED,
             evaluation=ContentEvaluation(relevance_score=8, category="AI Tools"),
         )
@@ -68,6 +65,7 @@ class TestProcessedContent:
     def test_should_not_post_when_rejected(self):
         pc = ProcessedContent(
             id=1,
+            topic="AI",
             status=ContentStatus.REJECTED,
             evaluation=ContentEvaluation(relevance_score=3, category="AI Tools"),
         )
@@ -76,6 +74,7 @@ class TestProcessedContent:
     def test_should_not_post_without_category(self):
         pc = ProcessedContent(
             id=1,
+            topic="AI",
             status=ContentStatus.APPROVED,
             evaluation=ContentEvaluation(relevance_score=8, category=""),
         )
@@ -84,7 +83,12 @@ class TestProcessedContent:
     def test_should_not_post_with_zero_score(self):
         pc = ProcessedContent(
             id=1,
+            topic="AI",
             status=ContentStatus.APPROVED,
             evaluation=ContentEvaluation(relevance_score=0, category="AI Tools"),
         )
         assert pc.should_post is False
+
+    def test_topic_field_defaults_to_empty(self):
+        pc = ProcessedContent()
+        assert pc.topic == ""
