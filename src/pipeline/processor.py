@@ -32,12 +32,14 @@ class ContentProcessor:
         self.evaluator = ContentEvaluator(llm, topic_config, web_search)
         self.topic = topic_config.name
 
-    async def process_source(self, source: ContentSource) -> list[ProcessedContent]:
+    async def process_source(
+        self, source: ContentSource, queries: list[str] | None = None
+    ) -> list[ProcessedContent]:
         """Fetch from a source and process all new content through the pipeline."""
         logger.info("pipeline.fetch_start", source=source.source_name, topic=self.topic)
 
         try:
-            raw_items = await source.fetch()
+            raw_items = await source.fetch(queries)
         except Exception:
             logger.exception("pipeline.fetch_failed", source=source.source_name, topic=self.topic)
             return []

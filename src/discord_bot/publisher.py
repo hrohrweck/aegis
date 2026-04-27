@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import discord
 import structlog
 
@@ -20,8 +22,9 @@ MAX_THREAD_NAME = 100
 
 def _category_color(category: str) -> int:
     """Generate a deterministic color for a category based on its name."""
-    # Simple hash-based color generation for visual distinction
-    hash_val = hash(category) & 0xFFFFFF
+    # Use MD5 for stable, deterministic hashing across process restarts
+    hash_bytes = hashlib.md5(category.encode()).digest()
+    hash_val = int.from_bytes(hash_bytes[:3], "big") & 0xFFFFFF
     # Ensure it's not too dark
     return max(hash_val, 0x333333)
 
